@@ -1,6 +1,6 @@
 # crb-fen-ctl — Chromebox 风扇温控
 
-Chromebox/Chromebook 简单风扇温控 Linux 脚本，基于 ectool 运行，支持 systemd/nohup 后台运行，按温度档位自动调速
+Chromebox/Chromebook 简单风扇温控 Linux 脚本，基于 ectool 运行，支持 systemd 后台运行，按温度档位自动调速
 
 
 ## 文件（仅 3 个）
@@ -11,6 +11,7 @@ Chromebox/Chromebook 简单风扇温控 Linux 脚本，基于 ectool 运行，�
 | `setup-systemd.sh` | 一键安装/卸载 systemd 服务（可执行，`sudo` 运行） |
 | `ectool` | Google ChromeOS EC 工具二进制（BSD-3-Clause，安装时复制到 `/usr/local/bin/`） |
 
+来源 [DHowett/ectool](https://github.com/DHowett/ectool)，**可自行编译更换**，安装时复制到 `/usr/local/bin/` |
 ## 快速开始
 
 ```bash
@@ -110,4 +111,8 @@ systemd-analyze verify crb-fen-clt.service    # 校验 service
 > 3. **转速档位表**：`UP1-5` 阈值与 `RPM1-6` 转速需按你的散热重新标定
 > 4. **功耗字段**：`PWR` 读 Intel RAPL，AMD 换路径或删除该字段
 
+## 许可证
 
+- 本仓库脚本与文档：MIT（[LICENSE](LICENSE)，Copyright (c) 2026 rrpro）
+- `ectool` 二进制：BSD 3-Clause，来源 [DHowett/ectool](https://github.com/DHowett/ectool)，
+  许可证全文见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
