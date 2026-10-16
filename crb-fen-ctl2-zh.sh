@@ -216,6 +216,10 @@ TARGET=$(rpm_of_level "$LVL")
 "$ECTOOL" pwmsetfanrpm "$TARGET" >/dev/null 2>&1
 log "启动，初始${TARGET}转（每${INTERVAL}秒检测，回差${HYST}°C）"
 
+# 预采一帧基准，消除首轮日志的 PWR/USE N/A
+calc_power
+calc_cpu_use
+
 while true; do
     TEMP=$(get_cpu_temp)
     calc_power
