@@ -11,7 +11,7 @@ Chromebox/Chromebook 简单风扇温控 Linux 脚本，基于 ectool 运行，�
 | `setup-systemd.sh` | 一键安装/卸载 systemd 服务（可执行，`sudo` 运行） |
 | `ectool` | Google ChromeOS EC 工具二进制（BSD-3-Clause，安装时复制到 `/usr/local/bin/`） |
 
-来源 [DHowett/ectool](https://github.com/DHowett/ectool)，**可自行编译更换**，安装时复制到 `/usr/local/bin/` |
+ectool 来源 [DHowett/ectool](https://github.com/DHowett/ectool)，**可自行编译更换**，安装时复制到 `/usr/local/bin/` |
 ## 快速开始
 
 ```bash
