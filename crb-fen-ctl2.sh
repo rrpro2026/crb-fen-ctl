@@ -216,9 +216,11 @@ TARGET=$(rpm_of_level "$LVL")
 "$ECTOOL" pwmsetfanrpm "$TARGET" >/dev/null 2>&1
 log "Start, init ${TARGET}RPM (every ${INTERVAL}s, hyst ${HYST}C)"
 
-# 预采一帧基准，消除首轮日志的 PWR/USE N/A
+# 预采一帧基准，并等满一个检测周期再进主循环：
+# 首轮差分窗口完整（≈INTERVAL 秒），首条日志数值才准确
 calc_power
 calc_cpu_use
+sleep "$INTERVAL"
 
 while true; do
     TEMP=$(get_cpu_temp)
