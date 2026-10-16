@@ -2,12 +2,15 @@
 
 Chromebox/Chromebook 简单风扇温控 Linux 脚本，基于 ectool 运行，支持 systemd 后台运行，按温度档位自动调速
 
+版本：v2（RRPRO by 20261017）
 
-## 文件（仅 3 个）
+
+## 文件
 
 | 文件 | 作用 |
 |------|------|
 | `crb-fen-ctl2.sh` | 主脚本（最终版，可执行）：5 秒检测，静默运行，只在转速变化时输出一行 |
+| `crb-fen-ctl2-zh.sh` | 中文输出版主脚本（可选）：与主脚本逻辑完全相同，仅启动/退出/错误提示为中文 |
 | `setup-systemd.sh` | 一键安装/卸载 systemd 服务（`sudo sh` 运行，缺执行位会自动补） |
 | `ectool` | Google ChromeOS EC 工具二进制（BSD-3-Clause，安装时复制到 `/usr/local/bin/`） |
 
@@ -19,7 +22,11 @@ git clone https://github.com/rrpro2026/crb-fen-ctl.git && cd ./crb-fen-ctl
 sudo sh ./setup-systemd.sh
 ```
 
-安装内容：ectool → `/usr/local/bin/`、按实际路径生成 `crb-fen-clt.service`、开机自启并立即运行。
+安装内容：ectool → `/usr/local/bin/`、按实际路径生成服务文件 `/etc/systemd/system/crb-fen-clt.service`、开机自启并立即运行。
+
+想用中文输出版：`sudo MAIN_SCRIPT=crb-fen-ctl2-zh.sh sh setup-systemd.sh`（卸载时用同样命令）。
+
+重复执行安装会**自动重启服务**——改完脚本或换版本后再跑一遍安装即生效，无需手动 `systemctl restart`。
 
 ```bash
 systemctl status crb-fen-clt          # 状态
@@ -30,7 +37,8 @@ sudo sh ./setup-systemd.sh remove     # 卸载（自动恢复 EC 自动风扇控
 不装服务直接跑：
 
 ```bash
-sudo sh ./crb-fen-ctl2.sh
+sudo sh ./crb-fen-ctl2.sh      # 英文输出
+sudo sh ./crb-fen-ctl2-zh.sh   # 中文输出（启动/退出/错误为中文，变档行仍英文）
 ```
 
 ## 温控策略

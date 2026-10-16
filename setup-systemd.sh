@@ -11,14 +11,15 @@
 #   1. 检查主脚本 crb-fen-ctl2.sh 与 ectool
 #   2. ectool 没装到 /usr/local/bin 就复制过去
 #   3. 按脚本实际所在路径生成 crb-fen-clt.service（不写死目录，git 克隆到哪都能用）
-#   4. daemon-reload + enable --now（开机自启 + 立即运行）
+#   4. daemon-reload + enable + restart（开机自启 + 立即运行；重复执行=自动重启生效）
 #
 # 卸载：disable --now（发 SIGTERM，脚本会自动恢复 EC 自动风扇控制）
 #       + 删除 service 文件 + daemon-reload
 # ============================================================
 
 UNIT_NAME="crb-fen-clt"
-MAIN_SCRIPT="crb-fen-ctl2.sh"
+# 主脚本；想用中文输出版：sudo MAIN_SCRIPT=crb-fen-ctl2-zh.sh sh setup-systemd.sh
+MAIN_SCRIPT="${MAIN_SCRIPT:-crb-fen-ctl2.sh}"
 ECTOOL_SRC="ectool"
 ECTOOL_DST="/usr/local/bin/ectool"
 
@@ -93,9 +94,12 @@ WantedBy=multi-user.target
 EOF
     echo "Installed: /etc/systemd/system/$UNIT_NAME.service"
 
-    # 4. 启用
+    # 4. 启用：开机自启 + 立即生效
+    #    （restart 对未运行的服务就是启动；对运行中的会换上新配置/新代码，
+    #      所以重复执行安装即可自动重启，无需手动 systemctl restart）
     systemctl daemon-reload
-    systemctl enable --now "$UNIT_NAME"
+    systemctl enable "$UNIT_NAME"
+    systemctl restart "$UNIT_NAME"
     echo ""
     echo "Done. Service is running."
     echo ""
