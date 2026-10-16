@@ -111,8 +111,10 @@ systemd-analyze verify crb-fen-clt.service    # 校验 service
 > 3. **转速档位表**：`UP1-5` 阈值与 `RPM1-6` 转速需按你的散热重新标定
 > 4. **功耗字段**：`PWR` 读 Intel RAPL，AMD 换路径或删除该字段
 
+
 ## 许可证
 
-- 本仓库脚本与文档：MIT（[LICENSE](LICENSE)，Copyright (c) 2026 rrpro）
+- 本仓库脚本与文档：GPL-3.0（[LICENSE](LICENSE)，Copyright (c) 2026 rrpro）
 - `ectool` 二进制：BSD 3-Clause，来源 [DHowett/ectool](https://github.com/DHowett/ectool)，
   许可证全文见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+
