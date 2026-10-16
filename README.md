@@ -19,18 +19,17 @@ ectool 来源 [DHowett/ectool](https://github.com/DHowett/ectool)，**可自行�
 
 ```bash
 git clone https://github.com/rrpro2026/crb-fen-ctl.git && cd ./crb-fen-ctl
-sudo sh ./setup-systemd.sh
+sudo sh ./setup-systemd.sh                                # 英文输出（默认）
+sudo MAIN_SCRIPT=crb-fen-ctl2-zh.sh sh ./setup-systemd.sh # 中文输出版（二选一）
 ```
 
 安装内容：ectool → `/usr/local/bin/`、按实际路径生成服务文件 `/etc/systemd/system/crb-fen-clt.service`、开机自启并立即运行。
-
-想用中文输出版：`sudo MAIN_SCRIPT=crb-fen-ctl2-zh.sh sh setup-systemd.sh`（卸载时用同样命令）。
 
 重复执行安装会**自动重启服务**——改完脚本或换版本后再跑一遍安装即生效，无需手动 `systemctl restart`。
 
 ```bash
 systemctl status crb-fen-clt          # 状态
-journalctl -u crb-fen-clt -f          # 跟踪日志
+sudo journalctl -u crb-fen-clt -f      # 跟踪日志（需 sudo 或用户在 adm 组）
 sudo sh ./setup-systemd.sh remove     # 卸载（自动恢复 EC 自动风扇控制）
 ```
 
