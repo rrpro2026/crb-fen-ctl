@@ -4,8 +4,8 @@
 # setup-systemd.sh — fanctl 一键 systemd 安装/卸载
 #
 # 用法：
-#   sudo ./setup-systemd.sh           安装并启动
-#   sudo ./setup-systemd.sh remove    停止并卸载
+#   sudo sh ./setup-systemd.sh         安装并启动
+#   sudo sh ./setup-systemd.sh remove  停止并卸载
 #
 # 做的事（安装）：
 #   1. 检查主脚本 crb-fen-ctl2.sh 与 ectool
@@ -30,6 +30,14 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# 补执行位：git 检出丢 x 位、GitHub zip 下载必丢 x 位，root 顺手修复
+fix_exec()
+{
+    if [ -f "$1" ] && [ ! -x "$1" ]; then
+        chmod 755 "$1" && echo "chmod +x: ${1##*/}"
+    fi
+}
+
 do_remove()
 {
     systemctl disable --now "$UNIT_NAME" 2>/dev/null && echo "Stopped + disabled: $UNIT_NAME"
@@ -42,15 +50,24 @@ do_remove()
 
 do_install()
 {
+    # 0. 补执行位（git/zip 检出常丢失）
+    fix_exec "$SCRIPT_DIR/setup-systemd.sh"
+    fix_exec "$SCRIPT_DIR/$MAIN_SCRIPT"
+    fix_exec "$SCRIPT_DIR/$ECTOOL_SRC"
+
     # 1. 主脚本检查
+    if [ ! -f "$SCRIPT_DIR/$MAIN_SCRIPT" ]; then
+        echo "Error: $MAIN_SCRIPT not found ($SCRIPT_DIR)"
+        exit 1
+    fi
     if [ ! -x "$SCRIPT_DIR/$MAIN_SCRIPT" ]; then
-        echo "Error: $MAIN_SCRIPT not found or not executable ($SCRIPT_DIR)"
+        echo "Error: $MAIN_SCRIPT not executable, run: chmod +x \"$SCRIPT_DIR/$MAIN_SCRIPT\""
         exit 1
     fi
 
     # 2. ectool 安装（脚本自身优先用同目录副本，但服务环境装到 PATH 更稳妥）
     if [ ! -x "$ECTOOL_DST" ]; then
-        if [ -x "$SCRIPT_DIR/$ECTOOL_SRC" ]; then
+        if [ -f "$SCRIPT_DIR/$ECTOOL_SRC" ]; then
             cp "$SCRIPT_DIR/$ECTOOL_SRC" "$ECTOOL_DST"
             chmod 755 "$ECTOOL_DST"
             echo "Installed: $ECTOOL_DST"

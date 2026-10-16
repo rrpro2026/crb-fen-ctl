@@ -52,8 +52,12 @@ RPM6="${RPM6:-5600}"
 # ----------------------------------------------------------
 
 # ectool 自动探测（配置区 ECTOOL 留空时生效）
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# 补执行位：git 检出/zip 下载常丢失 x 位（非 root 时静默失败，走下面回退）
+if [ -f "$SCRIPT_DIR/ectool" ] && [ ! -x "$SCRIPT_DIR/ectool" ]; then
+    chmod 755 "$SCRIPT_DIR/ectool" 2>/dev/null
+fi
 if [ -z "$ECTOOL" ]; then
-    SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
     if [ -x "$SCRIPT_DIR/ectool" ]; then
         ECTOOL="$SCRIPT_DIR/ectool"
     else
