@@ -11,6 +11,8 @@ Chromebox/Chromebook 简单风扇温控 Linux 脚本，基于 ectool 运行，�
 |------|------|
 | `crb-fen-ctl2.sh` | 主脚本（最终版，可执行）：5 秒检测，静默运行，只在转速变化时输出一行 |
 | `crb-fen-ctl2-zh.sh` | 中文输出版主脚本（可选）：与主脚本逻辑完全相同，仅启动/退出/错误提示为中文 |
+| `crb-fen-ctl3.sh` | **v3 升档滤波版**：连续 2 轮达阈值才升档（吸收后台任务瞬时尖峰），90°C 紧急绕过；`UP_N=1` 即回 v2 行为 |
+| `crb-fen-ctl3-zh.sh` | v3 中文输出版 |
 | `setup-systemd.sh` | 一键安装/卸载 systemd 服务（`sudo sh` 运行，缺执行位会自动补） |
 | `ectool` | Google ChromeOS EC 工具二进制（BSD-3-Clause，安装时复制到 `/usr/local/bin/`） |
 
@@ -31,6 +33,12 @@ sudo sh ./setup-systemd.sh
 
 ```bash
 sudo MAIN_SCRIPT=crb-fen-ctl2-zh.sh sh ./setup-systemd.sh
+```
+
+v3 升档滤波版（连续 2 轮达阈值才升档，防后台任务瞬时尖叫）：
+
+```bash
+sudo MAIN_SCRIPT=crb-fen-ctl3.sh sh ./setup-systemd.sh      # 中文 v3：crb-fen-ctl3-zh.sh
 ```
 
 安装内容：ectool → `/usr/local/bin/`、按实际路径生成服务文件 `/etc/systemd/system/crb-fen-clt.service`、开机自启并立即运行。
