@@ -2,7 +2,7 @@
 
 Chromebox/Chromebook 简单风扇温控 Linux 脚本，基于 ectool 运行，支持 systemd 后台运行，按温度档位自动调速
 
-版本：v2（RRPRO by 20261017）
+版本：v3（RRPRO by 20261018）
 
 
 ## 文件
