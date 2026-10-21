@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # ============================================================
-# crb-fen-ctl3.sh — Chromebox 风扇温控 v3（RRPRO by 20261018）
+# crb-fen-ctl3.sh — Chromebox 风扇温控 v3（RRPRO by 20261022）
 #
 # = v2 + 升档温度滤波：
 #   连续 UP_N 轮达到升档阈值才升档（默认 2 轮 ≈ 10 秒），
@@ -13,9 +13,11 @@
 #   sudo INTERVAL=10 UP1=50 ./crb-fen-ctl3.sh
 #
 # 日志：静默，只在变档时输出一行（无时间戳，journalctl 自带）：
-#   56C -> 2800RPM | PWR 8.3W | USE 12%
+#   56C -> 2800RPM | PWR 8.3W | USE 12% | GPU 8%
 # 启动 / 退出各一行
 # 功耗用 RAPL energy_uj 差分，CPU% 用 /proc/stat 差分（都不阻塞）
+# 核显 GPU% 用 intel_gpu_top 采样（需 intel-gpu-tools 包；未安装自动省略该字段），
+# 只在写日志/状态文件时才采样一个周期，变档稀少所以平时零开销
 # 退出时恢复自动风扇控制
 #
 # 档位规则：达到升档阈值升入下一档；降到阈值以下 HYST 才降档
@@ -39,6 +41,12 @@ UP_N="${UP_N:-2}"
 
 # 紧急温度（°C）：达到则绕过滤波立即升档，保底安全
 EMERG="${EMERG:-90}"
+
+# 核显使用率：1=日志/状态附带 GPU %（需 intel-gpu-tools），0=关闭；未安装工具自动省略
+GPU_USE="${GPU_USE:-1}"
+
+# 核显采样时长（秒）：每次采样占用一个周期，1-2 为宜
+GPU_T="${GPU_T:-1}"
 
 # 单行状态文件，留空不写（每轮覆盖，恒 1 行）
 STATUS_FILE="${STATUS_FILE:-}"
@@ -75,6 +83,11 @@ if [ -z "$ECTOOL" ]; then
         ECTOOL="/usr/local/bin/ectool"
     fi
 fi
+
+# intel_gpu_top 自动探测（核显使用率），缺失时 GPU 字段自动省略
+IGT=$(command -v intel_gpu_top 2>/dev/null || true)
+# GPU_T 只接受正整数（0/非法值会挂死 timeout 或出错，强制归 1）
+case "$GPU_T" in ''|*[!0-9]*|0) GPU_T=1 ;; esac
 
 # 需要 root 才能访问 /dev/cros_ec
 if [ "$(id -u)" -ne 0 ]; then
@@ -168,6 +181,20 @@ calc_cpu_use()
     PREV_IDLE=$IDL
 }
 
+# 核显使用率：intel_gpu_top 采样一个周期，各引擎 busy 求和封顶 100%
+# 只在写日志/状态文件时调用（变档稀少），平时零开销；结果设全局 GPU_PCT
+GPU_PCT=""
+calc_gpu_use()
+{
+    GPU_PCT=""
+    [ "$GPU_USE" = "1" ] && [ -n "$IGT" ] || return 0
+    OUT=$(timeout -s INT "$GPU_T" "$IGT" -J 2>/dev/null) || :
+    case "$OUT" in *'"busy"'*) : ;; *) return 0 ;; esac
+    GPU_PCT=$(printf '%s\n' "$OUT" | awk '/"period"/ { s = 0 } /"busy"/ { s += $2 }
+        END { if (s > 100) s = 100; printf "%d", s }')
+    case "$GPU_PCT" in ''|*[!0-9]*) GPU_PCT="" ;; esac
+}
+
 # 温度 → 档位（阈值/回差全部来自配置区）
 # $1=当前档位 $2=当前温度
 calc_rpm()
@@ -226,7 +253,9 @@ LVL="$INIT_LVL"
 HOLD=0
 TARGET=$(rpm_of_level "$LVL")
 "$ECTOOL" pwmsetfanrpm "$TARGET" >/dev/null 2>&1
-log "Start, init ${TARGET}RPM (every ${INTERVAL}s, hyst ${HYST}C, up x${UP_N})"
+GPU_NOTE="off"
+[ "$GPU_USE" = "1" ] && [ -n "$IGT" ] && GPU_NOTE="on"
+log "Start, init ${TARGET}RPM (every ${INTERVAL}s, hyst ${HYST}C, up x${UP_N}, gpu ${GPU_NOTE})"
 
 # 预采一帧基准，并等满一个检测周期再进主循环：
 # 首轮差分窗口完整（≈INTERVAL 秒），首条日志数值才准确
@@ -258,7 +287,10 @@ while true; do
             else
                 NEWRPM=$(rpm_of_level "$NEW")
                 if "$ECTOOL" pwmsetfanrpm "$NEWRPM" >/dev/null 2>&1; then
-                    log "${TEMP}C -> ${NEWRPM}RPM | PWR ${POWER}W | USE ${CPU_USE}%"
+                    calc_gpu_use
+                    LINE="${TEMP}C -> ${NEWRPM}RPM | PWR ${POWER}W | USE ${CPU_USE}%"
+                    [ -n "$GPU_PCT" ] && LINE="$LINE | GPU ${GPU_PCT}%"
+                    log "$LINE"
                     LVL="$NEW"
                     TARGET="$NEWRPM"
                     HOLD=0
@@ -268,8 +300,12 @@ while true; do
     fi
 
     # 状态文件：覆盖写，恒为 1 行
-    [ -n "$STATUS_FILE" ] && printf "%s | CPU:%sC | USE:%s%% | PWR:%sW | TGT:%sRPM\n" \
-        "$(date '+%Y-%m-%d %H:%M:%S')" "${TEMP:-?}" "$CPU_USE" "$POWER" "$TARGET" > "$STATUS_FILE"
+    if [ -n "$STATUS_FILE" ]; then
+        calc_gpu_use
+        SLINE="$(date '+%Y-%m-%d %H:%M:%S') | CPU:${TEMP:-?}C | USE:${CPU_USE}% | PWR:${POWER}W | TGT:${TARGET}RPM"
+        [ -n "$GPU_PCT" ] && SLINE="$SLINE | GPU:${GPU_PCT}%"
+        printf '%s\n' "$SLINE" > "$STATUS_FILE"
+    fi
 
     sleep "$INTERVAL"
 done

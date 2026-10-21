@@ -2,7 +2,7 @@
 
 Chromebox/Chromebook 简单风扇温控 Linux 脚本，基于 ectool 运行，支持 systemd 后台运行，按温度档位自动调速
 
-版本：v3（RRPRO by 20261018）
+版本：v3（RRPRO by 20261022）
 
 
 ## 文件
@@ -11,7 +11,7 @@ Chromebox/Chromebook 简单风扇温控 Linux 脚本，基于 ectool 运行，�
 |------|------|
 | `crb-fen-ctl2.sh` | 主脚本（最终版，可执行）：5 秒检测，静默运行，只在转速变化时输出一行 |
 | `crb-fen-ctl2-zh.sh` | 中文输出版主脚本（可选）：与主脚本逻辑完全相同，仅启动/退出/错误提示为中文 |
-| `crb-fen-ctl3.sh` | **v3 升档滤波版**：连续 2 轮达阈值才升档（吸收后台任务瞬时尖峰），90°C 紧急绕过；`UP_N=1` 即回 v2 行为 |
+| `crb-fen-ctl3.sh` | **v3 升档滤波版**：连续 2 轮达阈值才升档（吸收后台任务瞬时尖峰），90°C 紧急绕过；`UP_N=1` 即回 v2 行为；日志/状态附带核显 GPU % |
 | `crb-fen-ctl3-zh.sh` | v3 中文输出版 |
 | `setup-systemd.sh` | 一键安装/卸载 systemd 服务（`sudo sh` 运行，缺执行位会自动补） |
 | `ectool` | Google ChromeOS EC 工具二进制（BSD-3-Clause，安装时复制到 `/usr/local/bin/`） |
@@ -91,6 +91,15 @@ RPM1=1500 RPM2=2000 RPM3=2800 RPM4=3800 RPM5=4500 RPM6=5600  # 各档转速
 sudo INTERVAL=10 UP1=50 ./crb-fen-ctl2.sh
 ```
 
+v3 额外参数（`crb-fen-ctl3.sh` 配置区）：
+
+```sh
+UP_N=2    # 升档滤波：连续几轮达标才升档（1=不滤波，同 v2）
+EMERG=90  # 紧急温度（°C）：达到绕过滤波立即升档
+GPU_USE=1 # 核显使用率显示（0=关闭；需 intel-gpu-tools，未安装自动省略该字段）
+GPU_T=1   # 核显采样时长（秒）
+```
+
 单行状态文件（每轮覆盖，恒 1 行，随时 `cat` 查看）：
 
 ```bash
@@ -102,8 +111,8 @@ sudo STATUS_FILE=/tmp/fan.status ./crb-fen-ctl2.sh
 平时静默，只在转速变化时输出（时间由 journal 显示，脚本不加前缀）：
 
 ```
-Start, init 2000RPM (every 5s, hyst 5C)
-56C -> 2800RPM | PWR 8.3W | USE 12%
+Start, init 2000RPM (every 5s, hyst 5C, up x2, gpu on)
+56C -> 2800RPM | PWR 8.3W | USE 12% | GPU 8%
 Exit, auto fan on
 ```
 
@@ -112,12 +121,14 @@ Exit, auto fan on
 | 温度 | coretemp 各核心最高值 |
 | PWR | RAPL `energy_uj` 相邻两轮差分 ÷ 实际耗时 |
 | USE | `/proc/stat` 两轮差分 CPU 使用率 |
+| GPU | `intel_gpu_top` 各引擎 busy 求和封顶 100%（仅 v3；未装 intel-gpu-tools 时自动省略该字段） |
 
 ## 要求与行为
 
 - root（`/dev/cros_ec`、`energy_uj` 只有 root 可读）
 - systemd、coretemp、cros_ec 内核驱动（`ls /sys/class/hwmon/` 可见）
-- 性能：实测 systemd 统计约 **0.35% 单核 + 1.2MB 内存**（5 秒一轮，含全部子进程）
+- 可选：`intel-gpu-tools`（v3 核显 GPU% 字段用，`sudo apt install intel-gpu-tools`；未安装则日志自动省略 GPU 字段，其余功能不受影响）
+- 性能：实测 systemd 统计约 **0.35% 单核 + 1.2MB 内存**（5 秒一轮，含全部子进程）；v3 核显字段只在写日志/状态时才采样，不增加常驻开销
 - 安全：正常退出 / 服务停止（SIGTERM）都会通过 trap 恢复 `autofanctrl on`；崩溃由 systemd 5 秒后拉起
 - 风扇有固件最低转速限制，1500 若低于 min 实际转速下不去
 
