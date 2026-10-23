@@ -20,7 +20,7 @@ ectool 来源 [DHowett/ectool](https://github.com/DHowett/ectool)，**可自行�
 ## 快速开始
 
 ```bash
-git clone https://github.com/rrpro2026/crb-fen-ctl.git && cd ./crb-fen-ctl
+git clone -b gpu https://github.com/rrpro2026/crb-fen-ctl.git && cd ./crb-fen-ctl   # 本页为 gpu 核显分支；主线版去掉 -b gpu
 ```
 
 安装（二选一），英文版：
