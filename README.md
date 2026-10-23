@@ -96,8 +96,7 @@ v3 额外参数（`crb-fen-ctl3.sh` 配置区）：
 ```sh
 UP_N=2    # 升档滤波：连续几轮达标才升档（1=不滤波，同 v2）
 EMERG=90  # 紧急温度（°C）：达到绕过滤波立即升档
-GPU_USE=1 # 核显使用率显示（0=关闭；需 intel-gpu-tools，未安装自动省略该字段）
-GPU_T=1   # 核显采样时长（秒）
+GPU_USE=1 # 核显活跃度显示（0=关闭；读 i915 RC6 计数器反推，零依赖）
 ```
 
 单行状态文件（每轮覆盖，恒 1 行，随时 `cat` 查看）：
@@ -112,7 +111,7 @@ sudo STATUS_FILE=/tmp/fan.status ./crb-fen-ctl2.sh
 
 ```
 Start, init 2000RPM (every 5s, hyst 5C, up x2, gpu on)
-56C -> 2800RPM | PWR 8.3W | USE 12% | GPU 8%
+56C -> 2800RPM | PWR 8.3W | USE 12% | GPU 0.6%
 Exit, auto fan on
 ```
 
@@ -121,14 +120,14 @@ Exit, auto fan on
 | 温度 | coretemp 各核心最高值 |
 | PWR | RAPL `energy_uj` 相邻两轮差分 ÷ 实际耗时 |
 | USE | `/proc/stat` 两轮差分 CPU 使用率 |
-| GPU | `intel_gpu_top` 各引擎 busy 求和封顶 100%（仅 v3；未装 intel-gpu-tools 时自动省略该字段） |
+| GPU | i915 RC6 空闲计数器反推的 GT 活跃度（上一轮窗口内非空闲时间占比，仅 v3 gpu 分支；无 RC6 计数器自动省略该字段） |
 
 ## 要求与行为
 
 - root（`/dev/cros_ec`、`energy_uj` 只有 root 可读）
 - systemd、coretemp、cros_ec 内核驱动（`ls /sys/class/hwmon/` 可见）
-- 可选：`intel-gpu-tools`（v3 核显 GPU% 字段用，`sudo apt install intel-gpu-tools`；未安装则日志自动省略 GPU 字段，其余功能不受影响）
-- 性能：实测 systemd 统计约 **0.35% 单核 + 1.2MB 内存**（5 秒一轮，含全部子进程）；v3 核显字段只在写日志/状态时才采样，不增加常驻开销
+- 可选：无——核显 GPU% 直接读 i915 RC6 计数器（sysfs），零额外依赖；无此计数器的机器自动省略该字段，其余功能不受影响
+- 性能：实测 systemd 统计约 **0.35% 单核 + 1.2MB 内存**（5 秒一轮，含全部子进程）；核显字段每轮仅两次 sysfs 读（实测约 0.12ms/轮），无可感知开销
 - 安全：正常退出 / 服务停止（SIGTERM）都会通过 trap 恢复 `autofanctrl on`；崩溃由 systemd 5 秒后拉起
 - 风扇有固件最低转速限制，1500 若低于 min 实际转速下不去
 

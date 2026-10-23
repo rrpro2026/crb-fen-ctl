@@ -13,11 +13,11 @@
 #   sudo INTERVAL=10 UP1=50 ./crb-fen-ctl3-zh.sh
 #
 # 日志：静默，只在变档时输出一行（无时间戳，journalctl 自带）：
-#   56C -> 2800RPM | PWR 8.3W | USE 12% | GPU 8%
+#   56C -> 2800RPM | PWR 8.3W | USE 12% | GPU 0.6%
 # 启动 / 退出各一行（提示为中文，变档行与状态文件保持英文）
 # 功耗用 RAPL energy_uj 差分，CPU% 用 /proc/stat 差分（都不阻塞）
-# 核显 GPU% 用 intel_gpu_top 采样（需 intel-gpu-tools 包；未安装自动省略该字段），
-# 只在写日志/状态文件时才采样一个周期，变档稀少所以平时零开销
+# 核显 GPU% 读 i915 RC6 空闲计数器反推 GT 活跃度（sysfs，零依赖，每轮两次读、微秒级开销），
+# 无 RC6 计数器的机器自动省略该字段
 # 退出时恢复自动风扇控制
 #
 # 档位规则：达到升档阈值升入下一档；降到阈值以下 HYST 才降档
@@ -42,11 +42,8 @@ UP_N="${UP_N:-2}"
 # 紧急温度（°C）：达到则绕过滤波立即升档，保底安全
 EMERG="${EMERG:-90}"
 
-# 核显使用率：1=日志/状态附带 GPU %（需 intel-gpu-tools），0=关闭；未安装工具自动省略
+# 核显使用率：1=日志/状态附带 GPU %（读 i915 RC6 计数器，零依赖），0=关闭
 GPU_USE="${GPU_USE:-1}"
-
-# 核显采样时长（秒）：每次采样占用一个周期，1-2 为宜
-GPU_T="${GPU_T:-1}"
 
 # 单行状态文件，留空不写（每轮覆盖，恒 1 行）
 STATUS_FILE="${STATUS_FILE:-}"
@@ -84,10 +81,12 @@ if [ -z "$ECTOOL" ]; then
     fi
 fi
 
-# intel_gpu_top 自动探测（核显使用率），缺失时 GPU 字段自动省略
-IGT=$(command -v intel_gpu_top 2>/dev/null || true)
-# GPU_T 只接受正整数（0/非法值会挂死 timeout 或出错，强制归 1）
-case "$GPU_T" in ''|*[!0-9]*|0) GPU_T=1 ;; esac
+# i915 RC6 计数器探测（核显活跃度），无此文件的机器 GPU 字段自动省略
+RC6_FILE=""
+for F in /sys/class/drm/card*/gt/gt0/rc6_residency_ms \
+         /sys/class/drm/card*/power/rc6_residency_ms; do
+    [ -r "$F" ] && RC6_FILE="$F" && break
+done
 
 # 需要 root 才能访问 /dev/cros_ec
 if [ "$(id -u)" -ne 0 ]; then
@@ -181,18 +180,29 @@ calc_cpu_use()
     PREV_IDLE=$IDL
 }
 
-# 核显使用率：intel_gpu_top 采样一个周期，各引擎 busy 求和封顶 100%
-# 只在写日志/状态文件时调用（变档稀少），平时零开销；结果设全局 GPU_PCT
+# 核显 GT 活跃度：RC6 空闲计数器反推（活跃% = 上一轮窗口内非空闲时间占比）
+# 每轮调用（两次 sysfs 读 + 算术，微秒级）；结果设全局 GPU_PCT，格式 12.3
 GPU_PCT=""
+PREV_US_MS=""
+PREV_RC6=""
 calc_gpu_use()
 {
     GPU_PCT=""
-    [ "$GPU_USE" = "1" ] && [ -n "$IGT" ] || return 0
-    OUT=$(timeout -s INT "$GPU_T" "$IGT" -J 2>/dev/null) || :
-    case "$OUT" in *'"busy"'*) : ;; *) return 0 ;; esac
-    GPU_PCT=$(printf '%s\n' "$OUT" | awk '/"period"/ { s = 0 } /"busy"/ { s += $2 }
-        END { if (s > 100) s = 100; printf "%d", s }')
-    case "$GPU_PCT" in ''|*[!0-9]*) GPU_PCT="" ;; esac
+    [ "$GPU_USE" = "1" ] && [ -r "$RC6_FILE" ] || return 0
+    read -r US _ < /proc/uptime || return 0
+    read -r R6 < "$RC6_FILE" || return 0
+    # uptime "秒.厘秒" 拼接成厘秒再 ×10 → 毫秒
+    US_MS=$(( (${US%.*}${US#*.}) * 10 ))
+    if [ -n "$PREV_US_MS" ] && [ "$US_MS" -gt "$PREV_US_MS" ]; then
+        DT=$((US_MS - PREV_US_MS))
+        DR=$((R6 - PREV_RC6))
+        P=$(((DT - DR) * 1000 / DT))
+        [ "$P" -lt 0 ] && P=0
+        [ "$P" -gt 1000 ] && P=1000
+        GPU_PCT="$((P / 10)).$((P % 10))"
+    fi
+    PREV_US_MS="$US_MS"
+    PREV_RC6="$R6"
 }
 
 # 温度 → 档位（阈值/回差全部来自配置区）
@@ -254,19 +264,21 @@ HOLD=0
 TARGET=$(rpm_of_level "$LVL")
 "$ECTOOL" pwmsetfanrpm "$TARGET" >/dev/null 2>&1
 GPU_NOTE="开"
-[ "$GPU_USE" = "1" ] && [ -n "$IGT" ] || GPU_NOTE="关"
+[ "$GPU_USE" = "1" ] && [ -n "$RC6_FILE" ] || GPU_NOTE="关"
 log "启动，初始${TARGET}转（每${INTERVAL}秒检测，回差${HYST}°C，升档需连续${UP_N}轮，核显监测${GPU_NOTE}）"
 
 # 预采一帧基准，并等满一个检测周期再进主循环：
 # 首轮差分窗口完整（≈INTERVAL 秒），首条日志数值才准确
 calc_power
 calc_cpu_use
+calc_gpu_use
 sleep "$INTERVAL"
 
 while true; do
     TEMP=$(get_cpu_temp)
     calc_power
     calc_cpu_use
+    calc_gpu_use
 
     if [ -n "$TEMP" ]; then
         # 升档滤波计数：连续 UP_N 轮达到当前档升档阈值才允许升档
